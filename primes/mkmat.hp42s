@@ -1,0 +1,31 @@
+;;; Input:
+;;; - R02 = number of factors
+;;; - R03 .. R09 = factors (increasing)
+;;;
+;;; Output: matrix on X.
+
+LBL "MKMAT"
+
+;; Create a 1-row n-col matrix and index it
+1
+ENTER
+RCL 02
+NEWMAT
+STO FACTORS
+INDEX FACTORS
+
+;; Use R01 as indirect addressing for R03..R09
+3 STO 01
+
+;; Loop on registers
+LBL a
+RCL IND 01, STOEL
+1 STO + 01
+1 STO - 02
+;; skip redimentioning. in the last iteration
+RCL 02, x = 0?, GTO b
+RCLIJ, 1 +, STOIJ
+
+LBL b
+RCL 2, x > 0?, GTO a
+RTN

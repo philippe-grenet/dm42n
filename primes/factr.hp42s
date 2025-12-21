@@ -1,0 +1,141 @@
+;;; Factorize a number.
+;;; Input: a number on X.
+;;; Output:
+;;; - X: a matrix of the factors (not repeated)
+;;; - Alpha: a message Prime or N factors
+;;; - Flag 1: wether a factor was repeated
+;;;
+;;;; Algo:
+;;; function distinct_prime_factors( n ):
+;;;     if n <= 1:
+;;;         return  // no prime factors
+;;;
+;;;     // Check factor 2
+;;;     if n % 2 == 0:
+;;;         output 2
+;;;         while n % 2 == 0:
+;;;             n = n / 2
+;;;
+;;;     // Check odd factors
+;;;     f = 3
+;;;     while f * f <= n:
+;;;         if n % f == 0:
+;;;             output f
+;;;             while n % f == 0:
+;;;                 n = n / f
+;;;         f = f + 2
+;;;
+;;;     // If n is now > 1, it is prime
+;;;     if n > 1:
+;;;         output n
+;;;
+;;; Registers
+;;; - R00 = n
+;;; - R01 = current factor
+;;; - R02 = number of factors
+;;; - R01 .. R09 = factors (increasing)
+
+LBL "FACTR"
+L4STK
+STO 00
+
+;; Preconditions
+1
+x > y? GTO E        ; Error
+
+RCL 00, FP
+x > 0? GTO E        ; Error
+
+;; Initialize
+2 STO 01            ; current factor = 2
+0 STO 02.           ; number of factors = 0
+CF 01
+
+;; ----- Loop -----
+LBL A
+RCL 00, RCL 01, MOD
+x = 0? GTO D
+;; Not divisble
+RCL 01, 2, x = y?, GTO 03  ; if f = 2, set it to 3
+RCL 01, 2 +, STO 01        ; else set it to f + 2
+GTO C                      ; CHECKEND
+
+;; INC3
+LBL 03
+3 STO 01                   ; set f to 3
+
+;; CHECKEND
+LCL C
+RCL 00, SQRT
+RCL 01
+X > Y? GTO B               ; if f > sqrt( n ) ENDCHECK
+GTO A
+
+;; DIV Divisible, store f as a factor
+LBL D
+1 STO+ 02                  ; increment count of factors
+
+RCL 02                     ; store the factor in R03 .. R09
+2 +                        ; y = register number (R03 at first)
+RCL 01                     ; x = factor
+STO IND ST Y
+
+RCL 00, RCL 01, /, STO 00  ; n = n / f
+
+;; Keep dividing by f while possible
+LBL 01
+RCL 00, RCL 01, MOD, x != 0?, GTO A
+SF 01                       ; at least one factor is present multiple times
+RCL 00, RCL 01, /, STO 00  ; n = n / f
+1 -, x = 0?, GTO B         ; if f = 1, we are done
+GTO 01
+
+;; ENDCHECK
+LBL B
+;; when the loop ends, if the remaining of R00 is > 1, it is a factor too
+1, RCL 00, x > y?, GTO G   ; ADDLAST
+GTO H                      ; SETRESULT
+
+;; ADDLAST
+LBL G
+1 STO+ 02                 ; increment count
+
+RCL 02                     ; store the factor in R03 .. R09
+2 +                        ; y = register number (R03 at first)
+RCL 00                     ; x = factor
+STO IND ST Y
+
+;; SETRESULT
+LBL H
+1, RCL 02, x > y?, GTO 02       ; if count > 0, not prime
+FS? 01, GTO 02             ; only one factor, but repeated, so not prime
+GTO I                      ; the number is prime => PRIMECASE
+
+LBL 02                     ; not prime
+ARCL 02
+1, RCL 02, x = y?, GTO 04
+|- " factors"
+GTO 05
+
+LBL 04
+|- " factors"
+
+LBL 05
+XEQ MKMMAT
+CLST
+RCL Factors
+AVIEW
+RTN
+
+;; PRIMECASE
+LBL I
+"Prime"                    ; (alpha = "Prime")
+XEQ "MKMAT"                ; create 1×1 matrix and fill it from R03
+RCL FACTORS
+AVIEW
+RTN
+
+;; Errors
+LBL E
+"Error" AVIEW
+RTN

@@ -1,0 +1,123 @@
+;;; Checks if a number on X is a prime number.
+;;; Displays Prime or Not prime in Alpha.
+
+;;; 192 bytes
+
+LBL PRIME
+L4STK
+STO 0
+
+IP              ; non integer?  -> fail
+RCL 0
+X != Y
+GTO F
+
+2               ; x < 2? -> fail
+RCL 0
+X < Y
+GTO F
+
+RCL 0           ; x = 2? -> prime
+2
+X = Y
+GTO 01
+
+RCL 0           ; x = 3? -> prime
+3
+X = Y
+GTO 01
+
+RCL 0           ; = 5? -> prime
+5
+X = Y
+GTO 01
+
+RCL 00          ; divisible by 2? -> not prime
+2
+MOD
+X = 0
+GTO 02
+
+RCL 00          ; divisible by 3? -> not prime
+3
+MOD
+X = 0
+GTO 03
+
+5               ; initialize the loop: i = 1 to sqrt( x )
+STO 1
+RCL 0
+SQRT
+STO 2
+
+LBL B           ; beginning of loop
+RCL 0           ; test i
+RCL 1
+MOD
+X = 0
+GTO E           ; -> not prime
+
+2               ; test i + 2
+STO + 1
+RCL 0
+RCL 1
+MOD
+X = 0
+GTO E           ; -> not prime
+
+4               ; i += 6
+STO + 01
+RCL 2
+RCL 1
+X < Y
+GTO B           ; loop
+
+CLST            ; reached end of loop, x is prime
+"Prime"
+RCL 0
+AVIEW
+RTN
+
+LBL E           ; exited the loop before the end. Test for x = i.
+RCL 1
+RCL 0
+X != Y
+GTO a
+"Prime"
+GTO e
+LBL a
+"Not Prime"
+LBL e
+CLST
+RCL 1
+AVIEW
+RTN
+
+LBL 01          ; 2, 3 or 5 are prime
+CLST
+RCL 0
+"Prime"
+AVIEW
+RTN
+
+LBL 02          ; divisible by 2, so not prime
+CLST
+2
+"Not Prime"
+AVIEW
+RTN
+
+LBL 03          ; divisible by 3, so not prime
+CLST
+3
+"Not Prime"
+AVIEW
+RTN
+
+LBL F           ; precondition failed
+CLST
+"Error"
+AVIEW
+RTN
+
+END
