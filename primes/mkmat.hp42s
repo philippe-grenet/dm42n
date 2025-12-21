@@ -1,3 +1,5 @@
+;;; Subroutine: Create a 1-row, n-column matrix from a set of registers.
+;;;
 ;;; Input:
 ;;; - R02 = number of factors
 ;;; - R03 .. R09 = factors (increasing)
@@ -11,8 +13,8 @@ LBL "MKMAT"
 ENTER
 RCL 02
 NEWMAT
-STO FACTORS
-INDEX FACTORS
+STO "Factors"
+INDEX "Factors"
 
 ;; Use R01 as indirect addressing for R03..R09
 3 STO 01
