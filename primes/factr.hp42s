@@ -1,9 +1,11 @@
 ;;; Factorize a number.
-;;; Input: a number on X.
+;;;
+;;; Input: a number n on X.
+;;;
 ;;; Output:
 ;;; - X: a matrix of the factors (not repeated)
 ;;; - Alpha: a message Prime or N factors
-;;; - Flag 1: wether a factor was repeated
+;;; - Flag 1: set if any factor is repeated
 ;;;
 ;;;; Algo:
 ;;; function distinct_prime_factors( n ):
@@ -29,11 +31,12 @@
 ;;;     if n > 1:
 ;;;         output n
 ;;;
-;;; Registers
+;;; Registers:
 ;;; - R00 = n
-;;; - R01 = current factor
+;;; - R01 = current factor (f)
 ;;; - R02 = number of factors
 ;;; - R01 .. R09 = factors (increasing)
+;;;   Note: there is no limit in the number of registers being used.
 
 LBL "FACTR"
 L4STK
@@ -41,14 +44,14 @@ STO 00
 
 ;; Preconditions
 1
-x > y? GTO E        ; Error
+x > y? GTO E                ; Error
 
 RCL 00, FP
-x > 0? GTO E        ; Error
+x > 0? GTO E                ; Error
 
 ;; Initialize
-2 STO 01            ; current factor = 2
-0 STO 02.           ; number of factors = 0
+2 STO 01                    ; current factor = 2
+0 STO 02.                   ; number of factors = 0
 CF 01
 
 ;; ----- Loop -----
@@ -56,69 +59,69 @@ LBL A
 RCL 00, RCL 01, MOD
 x = 0? GTO D
 ;; Not divisble
-RCL 01, 2, x = y?, GTO 03  ; if f = 2, set it to 3
-RCL 01, 2 +, STO 01        ; else set it to f + 2
-GTO C                      ; CHECKEND
+RCL 01, 2, x = y?, GTO 03   ; if f = 2, set it to 3
+RCL 01, 2 +, STO 01         ; else set it to f + 2
+GTO C                       ; CHECKEND
 
 ;; INC3
 LBL 03
-3 STO 01                   ; set f to 3
+3 STO 01                    ; set f to 3
 
 ;; CHECKEND
 LCL C
 RCL 00, SQRT
 RCL 01
-X > Y? GTO B               ; if f > sqrt( n ) ENDCHECK
+X > Y?, GTO B               ; if f > sqrt( n ) ENDCHECK
 GTO A
 
 ;; DIV Divisible, store f as a factor
 LBL D
-1 STO+ 02                  ; increment count of factors
+1 STO+ 02                   ; increment count of factors
 
-RCL 02                     ; store the factor in R03 .. R09
-2 +                        ; y = register number (R03 at first)
-RCL 01                     ; x = factor
+RCL 02                      ; store the factor in R03 .. R09
+2 +                         ; y = register number (R03 at first)
+RCL 01                      ; x = factor
 STO IND ST Y
 
-RCL 00, RCL 01, /, STO 00  ; n = n / f
+RCL 00, RCL 01, /, STO 00   ; n = n / f
 
-;; Keep dividing by f while possible
+;; Keep dividing n by f while possible
 LBL 01
 RCL 00, RCL 01, MOD, x != 0?, GTO A
 SF 01                       ; at least one factor is present multiple times
-RCL 00, RCL 01, /, STO 00  ; n = n / f
-1 -, x = 0?, GTO B         ; if f = 1, we are done
+RCL 00, RCL 01, /, STO 00   ; n = n / f
+1 -, x = 0?, GTO B          ; if f = 1, we are done
 GTO 01
 
 ;; ENDCHECK
 LBL B
 ;; when the loop ends, if the remaining of R00 is > 1, it is a factor too
-1, RCL 00, x > y?, GTO G   ; ADDLAST
-GTO H                      ; SETRESULT
+1, RCL 00, x > y?, GTO G    ; ADDLAST
+GTO H                       ; SETRESULT
 
 ;; ADDLAST
 LBL G
-1 STO+ 02                 ; increment count
+1, STO+ 02                  ; increment count
 
-RCL 02                     ; store the factor in R03 .. R09
-2 +                        ; y = register number (R03 at first)
-RCL 00                     ; x = factor
+RCL 02                      ; store the factor in R03 .. R09
+2 +                         ; y = register number (R03 at first)
+RCL 00                      ; x = factor
 STO IND ST Y
 
 ;; SETRESULT
 LBL H
-1, RCL 02, x > y?, GTO 02       ; if count > 0, not prime
-FS? 01, GTO 02             ; only one factor, but repeated, so not prime
-GTO I                      ; the number is prime => PRIMECASE
+1, RCL 02, x > y?, GTO 02   ; if count > 0, not prime
+FS? 01, GTO 02              ; only one factor, but repeated, so not prime
+GTO I                       ; the number is prime => PRIMECASE
 
-LBL 02                     ; not prime
+LBL 02                      ; not prime
 ARCL 02
 1, RCL 02, x = y?, GTO 04
 |- " factors"
 GTO 05
 
 LBL 04
-|- " factors"
+|- " factor"
 
 LBL 05
 XEQ MKMMAT
@@ -129,8 +132,8 @@ RTN
 
 ;; PRIMECASE
 LBL I
-"Prime"                    ; (alpha = "Prime")
-XEQ "MKMAT"                ; create 1×1 matrix and fill it from R03
+"Prime"
+XEQ "MKMAT"
 RCL FACTORS
 AVIEW
 RTN
