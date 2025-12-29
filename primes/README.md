@@ -37,6 +37,10 @@ Draws an Ulam spiral. See https://en.wikipedia.org/wiki/Ulam_spiral .
 Enter the number of segments in register X, for example 100.
 Remember to adjust the resolution for your own device.
 
+Screenshot on DM42n with input = 400:
+
+![](img/ulam.bmp)
+
 Screenshot on Free42 iPhone app:
 
 ![](img/ulam.png)
