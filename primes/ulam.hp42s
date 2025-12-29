@@ -1,0 +1,197 @@
+;;; Ulam spiral - see https://en.wikipedia.org/wiki/Ulam_spiral
+;;;
+;;; Input: X = max number of segments.
+;;;
+;;; Starts at the screen center (200,120) for a 400×240 display.
+;;; Direction order is exactly: Right, Up, Left, Down, Right, ...
+;;;
+;;; Registers for the main program:
+;;; R10 = point y
+;;; R11 = point x
+;;; R12 = LEN - current segment length (starting at 1)
+;;; R13 = DIR - direction: 0=R, 1=U, 2=L, 4=D
+;;; R14 = number of segments remaining
+;;; R15 = step counter for the current segment
+;;; R16 / R17 = dx/dy
+;;; R18 = toggle (0/1) for length increment every 2 segments
+;;; R19 = current number (starts at 1)
+;;;
+;;; The prime subroutine (LBL 70) uses registers R00, R01, R02, and flag 00.
+
+LBL "ULAM"
+
+;; Initialize
+STO 14                  ; max number of segments
+
+;;; Note: adjust display resolution here.
+;;; 1) For DM42(n). the display resolution is 400 × 240 pixels,
+;;;    which means 1 ≤ X ≤ 400 and 1 ≤ Y ≤ 240 in 400x240 mode.
+;;;    Use 120 in R10 and 200 in R11.
+;;; 2) For Free42 (iPhone app), the display resolution is x = 131, y = 63.
+;;;    Use 32 in R10 and 66 in R11.
+120 STO 10              ; y
+200 STO 11.             ; x
+
+1 STO 12                ; LEN = 1
+0 STO 13                ; DIR = R
+0 STO 18                ; Toggle
+1 STO 19                ; current number
+
+CLLCD                   ; clear display
+XEQ 90                  ; first pixel
+
+;;; ==================== MAIN LOOP ====================
+LBL 00                  ; MAIN LOOP
+
+RCL 14, x<=0?, RTN      ; Terminate if no segments left
+
+RCL 12, STO 15          ; R15 = step counter for current segment
+
+;;; CASE R13: Choose dx,dy from direction
+RCL 13, 0, X=Y?, GTO 10 ; right
+RCL 13, 1, X=Y?, GTO 11 ; Up
+RCL 13, 2, X=Y?, GTO 12 ; left
+GTO 13                  ; down
+
+LBL 10                  ; DIR = 0 = RIGHT: dx=+1, dy=0
+1, STO 16
+0, STO 17
+GTO 20
+
+LBL 11                  ; DIR = 1 = UP: dx=0,dy=-1
+0, STO 16
+-1, STO 17
+GTO 20
+
+LBL 12                  ; DIR = 2 = LEFT, dx=-1, dy=0
+-1, STO 16
+0, STO 17
+GTO 20
+
+LBL 13                  ; DIR = 3 = DOWN, dx=0, dy=+1
+0, STO 16
+1, STO 17
+;;; End of CASE
+
+;;; ------------ Step loop for one segment ------------
+LBL 20
+RCL 16, STO + 11        ; x += dx
+RCL 17, STO.+ 10        ; y += dy
+
+XEQ 90                  ; PIXEL
+
+DSE 15, GTO 20          ; for loop
+
+;;; ------------- Change direction (mod 4) ------------
+RCL 13, 1 +, 4 MOD, STO 13
+
+;;; -- Toggle and, every 2 segments, increment length
+1, RCL 18, -, STO 18.   ; R18 = 1 - R18
+RCL 18, X=0?, GTO 30
+GTO 31
+
+LBL 30                  ; Toggle returned to 0 =. increment length
+1, STO + 12
+
+;;; -------- Set number of segments remaining ---------
+LBL 31
+1, STO - 14
+
+GTO 00                  ; GOTO MAIN LOOP
+
+
+;;; ------------------------------------------------------------
+;;; Subroutine: Draw a pixel
+;;; ------------------------------------------------------------
+LBL 90
+XEQ 70                  ; check if number R19 is prime -> set flag 00 if true
+RCL 10
+RCL 11
+FS? 00.                 ; only execute PIXEL if flag 00 is set, meaning prime
+PIXEL                   ; x y
+1, STO+ 19
+RTN
+
+
+;;; ------------------------------------------------------------
+;;; Subroutine: set flag 00 if R19 is prime
+;;; ------------------------------------------------------------
+;;; Registers:
+;;; - R00 = n
+;;; - R01 = current factor
+;;; - R02 - sqrt(n) = limit for the loop
+LBL 70
+CF 00
+RCL 19                  ; current number
+STO 00
+
+2                       ; x = 2? -> prime
+X = Y
+GTO 71
+
+RCL 00                  ; x = 3? -> prime
+3
+X = Y
+GTO 71
+
+RCL 00                  ; = 5? -> prime
+5
+X = Y
+GTO 71
+
+RCL 00                  ; divisible by 2? -> not prime
+2
+MOD
+X = 0
+RTN
+
+RCL 00                  ; divisible by 3? -> not prime
+3
+MOD
+X = 0
+RTN
+
+5                       ; initialize the loop: i = 1 to sqrt( x )
+STO 01                  ; current number = R01
+RCL 00
+SQRT
+STO 02                  ; limit = R02
+
+LBL 80                  ; beginning of loop
+RCL 00                  ; test i
+RCL 01
+MOD
+X = 0
+GTO 81                  ; goto end of loop
+
+2                       ; test i + 2
+STO + 01
+RCL 00
+RCL 01
+MOD
+X = 0
+GTO 81                  ; goto end of loop
+
+4                       ; i += 6
+STO + 01
+RCL 02
+RCL 01
+X < Y
+GTO 80                  ; loop
+
+;;; Reached end of loop, x is prime
+SF 00
+RTN
+
+LBL 81                  ; exited the loop before the end. Test for x = i.
+RCL 01
+RCL 00
+X != Y
+GTO 82
+SF 00                   ; prime
+LBL 82                  ; not prime
+RTN
+
+LBL 71                  ; 2, 3 or 5 are prime
+SF 00
+RTN
