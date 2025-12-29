@@ -1,5 +1,10 @@
 ;;; Checks if a number on X is a prime number.
 ;;; Displays Prime or Not prime in Alpha.
+;;;
+;;; Registers:
+;;; - R00 = n
+;;; - R01 = current factor
+;;; - R02 - sqrt(n) = limit for the loop
 
 ;;; 192 bytes
 

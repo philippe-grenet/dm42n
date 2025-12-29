@@ -53,6 +53,7 @@ x > 0? GTO E                ; Error
 2 STO 01                    ; current factor = 2
 0 STO 02.                   ; number of factors = 0
 CF 01
+CLA
 
 ;; ----- Loop -----
 LBL A
