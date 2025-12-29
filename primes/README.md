@@ -34,6 +34,7 @@ This is used by Factr.
 ## Ulam
 
 Draws an Ulam spiral. See https://en.wikipedia.org/wiki/Ulam_spiral .
+Enter the number of segments in register X, for example 100.
 Remember to adjust the resution for your own device.
 
 Screenshot on Free42 iPhone app:
