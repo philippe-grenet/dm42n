@@ -38,4 +38,4 @@ Remember to adjust the resution for your own device.
 
 Screenshot on Free42 iPhone app:
 
-![](img/ulam.bmp)
+![](img/ulam.png)
