@@ -19,6 +19,7 @@
 ;;; The prime subroutine (LBL 70) uses registers R00, R01, R02, and flag 00.
 
 LBL "ULAM"
+FUNC 11                 ; Free42 extensions, see https://thomasokken.com/free42/#extensions
 
 ;; Initialize
 STO 14                  ; max number of segments

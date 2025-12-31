@@ -9,7 +9,10 @@
 ;;; 192 bytes
 
 LBL PRIME
+
+FUNC 11        ; Free42 extensions, see https://thomasokken.com/free42/#extensions
 L4STK
+
 STO 0
 
 IP              ; non integer?  -> fail
@@ -77,8 +80,7 @@ RCL 1
 X < Y
 GTO B           ; loop
 
-CLST            ; reached end of loop, x is prime
-"Prime"
+"Prime"         ; reached end of loop, x is prime
 RCL 0
 AVIEW
 RTN
@@ -93,34 +95,29 @@ GTO e
 LBL a
 "Not Prime"
 LBL e
-CLST
 RCL 1
 AVIEW
 RTN
 
 LBL 01          ; 2, 3 or 5 are prime
-CLST
 RCL 0
 "Prime"
 AVIEW
 RTN
 
 LBL 02          ; divisible by 2, so not prime
-CLST
 2
 "Not Prime"
 AVIEW
 RTN
 
 LBL 03          ; divisible by 3, so not prime
-CLST
 3
 "Not Prime"
 AVIEW
 RTN
 
 LBL F           ; precondition failed
-CLST
 "Error"
 AVIEW
 RTN
