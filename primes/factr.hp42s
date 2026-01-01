@@ -47,10 +47,10 @@ STO 00
 
 ;; Preconditions
 1
-x > y? GTO E                ; Error
+X>Y? , GTO E                ; Error
 
 RCL 00, FP
-x > 0? GTO E                ; Error
+X>0? , GTO E                ; Error
 
 ;; Initialize
 2 STO 01                    ; current factor = 2
@@ -58,32 +58,34 @@ x > 0? GTO E                ; Error
 CF 01
 CLA
 
-;; ----- Loop -----
+;;; --------------------------------------------------------------------------------
+;;; Loop
+;;; --------------------------------------------------------------------------------
 LBL A
 RCL 00, RCL 01, MOD
-x = 0? GTO D
+X=0? , GTO D
 ;; Not divisble
-RCL 01, 2, x = y?, GTO 03   ; if f = 2, set it to 3
+RCL 01, 2, X=Y?, GTO 03     ; if f = 2, set it to 3
 RCL 01, 2 +, STO 01         ; else set it to f + 2
 GTO C                       ; CHECKEND
 
 ;; INC3
 LBL 03
-3 STO 01                    ; set f to 3
+3, STO 01                   ; set f to 3
 
 ;; CHECKEND
 LCL C
 RCL 00, SQRT
 RCL 01
-X > Y?, GTO B               ; if f > sqrt( n ) ENDCHECK
+X>Y? , GTO B                ; if f > sqrt( n ) ENDCHECK
 GTO A
 
 ;; DIV Divisible, store f as a factor
 LBL D
-1 STO+ 02                   ; increment count of factors
+1 , STO+ 02                 ; increment count of factors
 
 RCL 02                      ; store the factor in R03 .. R09
-2 +                         ; y = register number (R03 at first)
+2 , +                       ; y = register number (R03 at first)
 RCL 01                      ; x = factor
 STO IND ST Y
 
@@ -91,16 +93,16 @@ RCL 00, RCL 01, /, STO 00   ; n = n / f
 
 ;; Keep dividing n by f while possible
 LBL 01
-RCL 00, RCL 01, MOD, x != 0?, GTO A
+RCL 00, RCL 01, MOD, X!=0?, GTO A
 SF 01                       ; at least one factor is present multiple times
 RCL 00, RCL 01, /, STO 00   ; n = n / f
-1 -, x = 0?, GTO B          ; if f = 1, we are done
+1, -, X=0?, GTO B           ; if f = 1, we are done
 GTO 01
 
 ;; ENDCHECK
 LBL B
 ;; when the loop ends, if the remaining of R00 is > 1, it is a factor too
-1, RCL 00, x > y?, GTO G    ; ADDLAST
+1, RCL 00, X>Y?, GTO G    ; ADDLAST
 GTO H                       ; SETRESULT
 
 ;; ADDLAST
@@ -114,13 +116,13 @@ STO IND ST Y
 
 ;; SETRESULT
 LBL H
-1, RCL 02, x > y?, GTO 02   ; if count > 0, not prime
+1, RCL 02, X>Y?, GTO 02     ; if count > 0, not prime
 FS? 01, GTO 02              ; only one factor, but repeated, so not prime
 GTO I                       ; the number is prime => PRIMECASE
 
 LBL 02                      ; not prime
 ARCL 02
-1, RCL 02, x = y?, GTO 04
+1, RCL 02, X=Y?, GTO 04
 |- " factors"
 GTO 05
 
@@ -136,7 +138,7 @@ RTN
 ;; PRIMECASE
 LBL I
 "Prime"
-XEQ "MKMAT"
+XEQ a                       ; equivalent of XEQ "NEWMAT"
 RCL FACTORS
 AVIEW
 RTN
@@ -144,4 +146,40 @@ RTN
 ;; Errors
 LBL E
 "Error" AVIEW
+RTN
+
+;;; --------------------------------------------------------------------------------
+;;; Subroutine: Create a 1-row, n-column matrix from a set of registers.
+;;;
+;;; Input:
+;;; - R02 = number of factors
+;;; - R03 .. R09 = factors (increasing)
+;;;
+;;; Output: matrix on X.
+;;; --------------------------------------------------------------------------------
+
+LBL a
+
+;; Create a 1-row n-col matrix and index it
+1
+ENTER
+RCL 02
+NEWMAT
+STO "Factors"
+INDEX "Factors"
+
+;; Use R01 as indirect addressing for R03..R09
+3, STO 01
+
+;; Loop on registers
+LBL 10
+RCL IND 01, STOEL
+1, STO + 01
+1, STO - 02
+;; skip redimentioning. in the last iteration
+RCL 02, X=0?, GTO 11
+RCLIJ, 1 +, STOIJ
+
+LBL 11
+RCL 02, X>0?, GTO 10
 RTN
