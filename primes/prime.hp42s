@@ -5,25 +5,25 @@
 ;;; - R00 = n
 ;;; - R01 = current factor
 ;;; - R02 - sqrt(n) = limit for the loop
-
-;;; 192 bytes
+;;;
+;;; This program uses some Free42 extensions, see https://thomasokken.com/free42/#extensions.
+;;; It can easily be made working without them.
 
 LBL PRIME
 
-FUNC 11        ; Free42 extensions, see https://thomasokken.com/free42/#extensions
+FUNC 11        ; Free42 extensions
 L4STK
 
 STO 0
 
-IP              ; non integer?  -> fail
-RCL 0
-X != Y
-GTO F
-
+;; Preconditions
+FP              ; non integer?  -> fail
+X!=0?
+RTNERR 5        ; Free42 extension
 2               ; x < 2? -> fail
 RCL 0
 X < Y
-GTO F
+RTNERR 5
 
 RCL 0           ; x = 2? -> prime
 2
@@ -114,11 +114,6 @@ RTN
 LBL 03          ; divisible by 3, so not prime
 3
 "Not Prime"
-AVIEW
-RTN
-
-LBL F           ; precondition failed
-"Error"
 AVIEW
 RTN
 

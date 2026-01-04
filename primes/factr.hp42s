@@ -37,20 +37,27 @@
 ;;; - R02 = number of factors
 ;;; - R01 .. R09 = factors (increasing)
 ;;;   Note: there is no limit in the number of registers being used.
+;;;
+;;; This program uses some Free42 extensions, see https://thomasokken.com/free42/#extensions.
+;;; It can easily be made working without them.
 
 LBL "FACTR"
 
-FUNC 11                     ; Free42 extensions, see https://thomasokken.com/free42/#extensions
+FUNC 11                     ; Free42 extensions
 L4STK
 
 STO 00
+CLA
 
 ;; Preconditions
+FP
+X!=0?
+RTNERR 5
+RCL 00
 1
-X>Y? , GTO E                ; Error
-
-RCL 00, FP
-X>0? , GTO E                ; Error
+X>=Y?
+RTNERR 5
+RCL 00
 
 ;; Initialize
 2 STO 01                    ; current factor = 2
@@ -130,32 +137,28 @@ LBL 04
 |- " factor"
 
 LBL 05
-XEQ MKMMAT
-RCL Factors
+XEQ a                       ; MKMAT
+RCL "Factors"
 AVIEW
 RTN
 
 ;; PRIMECASE
 LBL I
 "Prime"
-XEQ a                       ; equivalent of XEQ "NEWMAT"
-RCL FACTORS
+XEQ a                       ; MKMAT
+RCL "Factors"
 AVIEW
 RTN
 
-;; Errors
-LBL E
-"Error" AVIEW
-RTN
-
 ;;; --------------------------------------------------------------------------------
-;;; Subroutine: Create a 1-row, n-column matrix from a set of registers.
+;;; Subroutine: MKMAT
+;;; Create a 1-row, n-column matrix from a set of registers.
 ;;;
 ;;; Input:
 ;;; - R02 = number of factors
 ;;; - R03 .. R09 = factors (increasing)
 ;;;
-;;; Output: matrix on X.
+;;; Output: variable "Factors"
 ;;; --------------------------------------------------------------------------------
 
 LBL a
