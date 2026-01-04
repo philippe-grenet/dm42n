@@ -1,0 +1,53 @@
+;;; Next Prime
+;;;
+;;; Original program from the HP 32s manual, adapted to HP 42s.
+;;;
+;;; Take any positive integer greater than 3. If the number is prime, return the input value.
+;;; If the input is not prime, return the first prime larger than the input.
+;;;
+;;; The program identifies non-prime numbers by exhaustively trying all possible factors.
+;;; If the number is not prime, the program adds 2 (assuring that the value is still odd) and tests
+;;; to see if it has found a prime. The process continues until a prime is found.
+;;;
+;;; Registers:
+;;; R00 = P
+;;; R01 = D
+
+LBL "NEXTP"
+GTO 00          ; P
+
+LBL 01          ; LBL Y
+CLST
+RCL 00          ; VIEW P
+STOP
+
+LBL 02          ; LBL Z
+2
+RCL+ 00         ; RCL+ P
+
+LBL 00          ; LBL P
+STO 00          ; STO P
+2
+/
+FP
+0
+X=Y?
+1
+STO+ 00         ; STO+ P
+3
+STO 01          ; STO D
+
+LBL 03          ; LBL X
+RCL 00          ; RCL P
+RCL / 01        ; RCL/ D
+FP
+X=0?
+GTO 02          ; GTO Z
+RCL 00          ; RCL P
+SQRT
+RCL 01          ; RCL D
+X>Y?
+GTO 01          ; GTO Y
+2
+STO+ 01         ; STO+ D
+GTO 03          ; GTO X
