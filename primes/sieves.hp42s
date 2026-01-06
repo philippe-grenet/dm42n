@@ -29,12 +29,19 @@
 
 LBL "SIEVE"
 
-FUNC 11                                 ; see https://thomasokken.com/free42/#extensions
+FUNC 11                                 ; free42 extensions
 L4STK
 
-IP
 STO 00                                  ; R00 = n
-2, X>Y?, RTN                            ; precondition: n >= 2
+
+;; Preconditions
+FP
+X!=0
+RTNERR 5                                ; free42 extension
+RCL 00
+2
+X>=Y?
+RTN
 
 ;;; --------------------------------------------------------------------------------
 ;;; Divide the range 2 to n into s segments of size Δ ≥ √n
@@ -113,23 +120,6 @@ GTO 04                                  ; A[i] = 1 = not true
 
 LBL 04
 ISG 03, GTO 03                          ; loop on i
-
-;; Tests:
-;;
-;; For n = 5
-;;  i = 2 --> A[] = [ 2  3  -4-  5 ]   = 0100
-;;                = 4  (3 primes)
-;;
-;;For n = 10:
-;;  i = 2 --> A[] = [ 2  3  -4-  5  -6-  7  -8-  9  -10- ]   = 1,0101,0100
-;;  i = 3 --> A[] = [ 2  3  -4-  5  -6-  7  -8-  -9-  -10- ] = 1,1101,0100
-;;                = 468  (4 primes)
-;;
-;; For n = 20:
-;;  i = 2 --> A[] = [ 2  3  -4-  5  -6-  7  -8-  9  -10-  11  -12-  13  -14-  15  -16-  17  -18-  19  -20-  ]
-;;  i = 3 --> A[] = [ 2  3  -4-  5  -6-  7  -8-  -9-  -10-  11  -12-  13  -14-  -15-  -16-  17  -18-  19  -20-  ]
-;;  i = 4 --> A[] = [ 2  3  -4-  5  -6-  7  -8-  -9-  -10-  11  -12-  13  -14-  -15-  -16-  17  -18-  19  -20-  ]
-;;                = 101,0111,0101,1101,0100 = 357,844  (8 primes)
 
 ;;; --------------------------------------------------------------------------------
 ;;; Store the primes from current segment the result matrix
