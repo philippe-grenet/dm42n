@@ -15,17 +15,22 @@
 ;;; R03 = i
 ;;; R04 = j
 ;;; R05 = k
-;;;
+;;; R06 = s = number of segments
+;;; (R07 unused)
 ;;; R08 = WSZ = word size in bits
 ;;; R09 = w = number of words in A[]
 ;;; R10..Rxx = A[] = bit array containing words.
 ;;;   Each word is a zero-indexed bit array storing flags for successive numbers from 2 to n.
 ;;;   The first word is for numbers 2..36, the second word for numbers 37..73, etc.
 ;;;   In each word, bits 0 mark the corresponding numbers as prime, bits 1 marks them as non-prime.
+;;;   Note that by default we have R00..R14, which is 15 registers, or 15 * 35 = 525 numbers
+;;;   (enough for the first 99 primes without segmentation).
+;;;
+;;; This program uses some Free42 extensions, see https://thomasokken.com/free42/#extensions.
+;;; It can easily be made working without them.
 
 ;;; *** LINKS ***
 ;;; https://cp-algorithms.com/algebra/sieve-of-eratosthenes.html
-;;; https://thomasokken.com/free42/#extensions
 
 LBL "SIEVE"
 
@@ -34,27 +39,23 @@ L4STK
 
 STO 00                                  ; R00 = n
 
-;; Preconditions
+;;; --------------------------------------------------------------------------------
+;;; Preconditions
+;;; --------------------------------------------------------------------------------
 FP
 X!=0
 RTNERR 5                                ; free42 extension
 RCL 00
 2
 X>=Y?
-RTN
-
-;;; --------------------------------------------------------------------------------
-;;; Divide the range 2 to n into s segments of size Δ ≥ √n
-;;; --------------------------------------------------------------------------------
-
-;;; TODO
+RTNERR 5
 
 ;;; --------------------------------------------------------------------------------
 ;;; Calculate the number of words in A[], store in w
 ;;; --------------------------------------------------------------------------------
 
-;;; Set word size in R08. Set it to 35 on a real HP-42s
-WSIZE?
+;;; Note: for a real HP 42s, store 35 in R08 (it uses signed 36-bit words).
+WSIZE?                                  ; free42 extension
 1, -
 STO 08                                  ; WSZ
 
@@ -64,9 +65,31 @@ RCL 00                                  ; n
 RCL 08, /, IP
 STO 09                                  ; w = int(a / WSZ)
 
+0
+STL 06                                  ; s = 0
+
+;;; If w is 3 words or less, just do a the first segment.
+3
+X<=Y?
+GTO A
+
+;;; --------------------------------------------------------------------------------
+;;; Divide the range 2 to n into s segments of size Δ ≥ √n
+;;; --------------------------------------------------------------------------------
+
+RCL 00
+SQRT
+ENTER                                   ; a little trick to round to the next integer
+FP
++
+IP
+STO 06                                  ; s = number of segments
+
 ;;; --------------------------------------------------------------------------------
 ;;; Mark prime numbers in current segment in A[]
 ;;; --------------------------------------------------------------------------------
+
+LBL A                                   ; First segment
 
 ;; Initialize A[] with all words to 0 (initially all numbers are marked prime)
 XEQ e                                   ; CLEAR-BITS
@@ -147,6 +170,8 @@ RCLIJ, 1, +, STOIJ                      ; move to next cell
 LBL 06
 ISG 03, GTO 05                          ; loop on i
 
+;;; Result
+RCL "Primes"
 RTN
 ;;; END PROGRAM
 
