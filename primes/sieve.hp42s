@@ -12,7 +12,7 @@
 ;;; R04 = j
 ;;; R05 = k or p
 ;;; R06 = temporary
-;;; R07 = start
+;;; R07 = unused
 ;;; R08 = WSZ = word size in bits
 ;;; R09 = w = number of words in A[]
 ;;; R10..Rxx = A[] = bit array containing words.
@@ -48,7 +48,7 @@ RTNERR 5                                ; free42 extension
 RCL 00
 2
 X>=Y?                                   ; limit must be at last 2
-RTNERR 5                                ; free42 extension
+RTNERR 5
 
 ;;; --------------------------------------------------------------------------------
 ;;; Word size
@@ -88,7 +88,7 @@ ENTER                                   ; a little trick to round to the next in
 FP
 +
 IP
-LSTO "S"                                ; segment_size
+LSTO "S"                                ; free42 extension, segment_size
 
 ;;; --------------------------------------------------------------------------------
 ;;; Step 1: primes up to sqrt(n) -> matrix "Base"
@@ -113,7 +113,7 @@ RCL "S"
 LSTO "H"                                ; high = low + segment_size
 
 ;;; while low <= n:
-LBL C
+LBL 30
 
 RCL 00                                  ; if high > n + 1 then high = n + 1
 1
@@ -122,39 +122,33 @@ RCL "H"
 XEQ H                                   ; MIN
 LSTO "H"
 
-;;; DELETE: (this is to test the while loop)
-CLST
-RCL "L"
-RCL "H"
-PSE
-
 ;;; ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((
 ;;; Set up a bit array for the current segment
-RCL "H"
-RCL "L"
--                                       ; high - low
-2, -                                    ; first number is 2
-RCL 08, /, IP
-STO 09                                  ; w = int((high - low) / WSZ)
-;; Initialize A[] with all words to 0 (initially all numbers are marked prime)
-XEQ e                                   ; CLEAR_BITS
+XEQ I                                   ; INIT_SEGMENT
 
 ;;; for all primes in matrix "Base":
 RCL "P"
 1000, /, IP, 1, +, STO 03               ; i = 1.ppp where ppp = number of primes
 
+;;; (DEBUG
+CLST
+RCL "Base"
+STOP
+;;; DEBUG)
+
 INDEX "Base"
-LBL D                                   ; loop on primes in "Base"
+
+LBL 31                                  ; loop on primes in "Base"
 RCLEL
 STO 05                                  ; p
 
-;;; Find first multiple of p in [low, high)
-XEQ J                                   ; START: start = max(p * p, ((low + p - 1) // p) * p)
-
+;;; Find first multiple of p in [low, high):
+;;; start = max(p * p, ((low + p - 1) // p) * p)
 ;;; for j in range(start, high, p):
 ;;;    A[j - low] = false
-RCL 07                                  ; start
+XEQ J                                   ; START
 STO 04                                  ; j
+LBL 32                                  ; for j loop
 RCL 04                                  ; j
 RCL "L"
 -
@@ -164,19 +158,27 @@ RCL 04                                  ; j
 X>Y?
 GTO 20
 RCL 05                                  ; p
-STO+ 04                                 ; j
+STO+ 04                                 ; j += p
+GTO 32                                  ; for j loop
 LBL 20
 
 ;;; Next prime p
 RCL "P", 1, -
-RCL 03, IP
-X<=0?, GTO 21                           ; skip moving to next cell in the last iteration
+RCL 03, IP                              ; i
+X>=Y?, GTO 21                           ; skip moving to next cell in the last iteration
 RCLIJ, 1, +, STOIJ                      ; move to next cell
 LBL 21
 ISG 03
-GTO D                                   ; loop on primes in "Base"
+GTO 31                                  ; loop on primes in "Base"
 
-;;; TODO: to test, before creating a matrix, just print the primes in the current segment
+;;; (DEBUG
+CLST
+RCL "L"  ; T
+RCL "H"  ; Z
+RCL 09   ; num words
+RCL 10   ; A[0]
+STOP
+;;; DEBUG)
 
 ;;; TODO: Add primes from the segment A[] into the result matrix "Primes"
 ;;; ---- Create an empty matrix "Prime" in Step 1 (make it 1x1, set flag 01 to indicate it is empty)
@@ -197,7 +199,7 @@ LSTO "H"
 RCL 00                                  ; n
 RCL "L"
 X<=Y?
-GTO C                                   ; while low <= n
+GTO 30                                  ; while low <= n
 
 RCL "Primes"
 RTN                                     ; END PROGRAM
@@ -396,7 +398,7 @@ RTN
 ;;; ================================================================================
 ;;; Subroutine: START
 ;;; start = max(p * p, ((low + p - 1) // p) * p)
-;;; Output: R07 start
+;;; Output: X = start
 ;;; ================================================================================
 LBL J
 ;;; ((low + p - 1) // p) * p
@@ -410,11 +412,26 @@ RCL 05                                  ; p
 IP                                      ; floor division (p is always positive)
 RCL 05                                  ; p
 *
-
 ;;; p * p
 RCL 05                                  ; p
 X^2
-
+;;; max
 XEQ G                                   ; MAX
-STO 07                                  ; start
+RTN
+
+;;; ================================================================================
+;;; Subroutine: INIT_SEGMENT
+;;; Initialize the bit array for the current segment
+;;; ================================================================================
+;; Calculate number of words w = int((high - low) / WSZ)
+LBL I
+RCL "H"
+RCL "L"
+-
+RCL 08
+/
+IP
+STO 09
+;; Initialize A[] with all words to 0 (initially all numbers are marked prime)
+XEQ e                                   ; CLEAR_BITS
 RTN
