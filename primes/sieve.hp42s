@@ -1,437 +1,532 @@
 ;;; Segmented Sieve: https://en.wikipedia.org/wiki/Sieve_of_Eratosthenes
 ;;; Creates a matrix containing all prime numbers from 2 to a specified limit.
 ;;;
-;;; Input: the limit n in X.
-;;; Output: matrix of primes in X
+;;; Input: X = the limit n.
+;;; Output: X = matrix of primes (1 row multi columns).
 ;;;
-;;; Registers:
-;;; R00 = limit n
-;;; R01 = a = index of current word in bit array A[]
-;;; R02 = b = bit number if A[a]
-;;; R03 = i
-;;; R04 = j
-;;; R05 = k or p
-;;; R06 = temporary
-;;; R07 = unused
-;;; R08 = WSZ = word size in bits
-;;; R09 = w = number of words in A[]
-;;; R10..Rxx = A[] = bit array containing words.
-;;;   Each word is a zero-indexed bit array storing flags for successive numbers from 2 to n.
-;;;   The first word is for numbers 2..36, the second word for numbers 37..73, etc.
-;;;   In each word, bits 0 mark the corresponding numbers as prime, bits 1 marks them as non-prime.
-;;;   Note that by default we have R00..R14, which is 15 registers, or 15 * 35 = 525 numbers
-;;;   (that's enough for the first 99 primes without segmentation).
+;;; Global variables:
+;;; - WSIZE: word size.
+;;; - BITMAP refers to registers R10..R25 (or more if SIZE is set bigger).
+;;;   It is a zero-indexed bit array representing successive numbers from 2 to n.
+;;;   The first word is for numbers 2..35, the second word for numbers 36..72, etc.
+;;;   In each word:
+;;;   - A bit 0 marks the corresponding number as PRIME,
+;;;   - A bit 1 marks the correspomding number as non-prime.
+;;;   R00..R14 is 15 registers, which enough to contain 15 * 35 = 525 numbers.
+;;;   That's enough for the first 99 primes without segmentation.
 ;;;
-;;; Notes:
-;;; 1. This program uses bitmap operations. On DM42, the word size is configurable and queryable.
-;;;    For a real HP 42s you should set it to 35 bits (see notes in program).
-;;; 2. This program uses some Free42 extensions, see https://thomasokken.com/free42/#extensions.
-;;;    It can however easily be made working without them. Extensions are marked in comments.
-;;; 3. The limit at which the program switches from Sieve to Segmented Sieve in hard coded.
-
-;;; *** LINKS ***
-;;; https://cp-algorithms.com/algebra/sieve-of-eratosthenes.html
+;;; List of prime numbers from 1 to 500:
+;;; 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73,
+;;; 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163,
+;;; 167, 173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229, 233, 239, 241, 251,
+;;; 257, 263, 269, 271, 277, 281, 283, 293, 307, 311, 313, 317, 331, 337, 347, 349,
+;;; 353, 359, 367, 373, 379, 383, 389, 397, 401, 409, 419, 421, 431, 433, 439, 443,
+;;; 449, 457, 461, 463, 467, 479, 487, 491, 499
 
 LBL "SIEVE"
+FUNC 11
+L4STK
+LSTO "n"
 
-FUNC 11                                 ; free42 extension
-L4STK                                   ; free42 extension
-
-STO 00                                  ; R00 = n
-
-;;; --------------------------------------------------------------------------------
 ;;; Preconditions
-;;; --------------------------------------------------------------------------------
-FP
-X!=0                                    ; limit must be integer
-RTNERR 5                                ; free42 extension
-RCL 00
 2
-X>=Y?                                   ; limit must be at last 2
-RTNERR 5
-
-;;; --------------------------------------------------------------------------------
-;;; Word size
-;;; --------------------------------------------------------------------------------
-;;; Note: for a real HP 42s, store 35 in R08.
-;;; HP 42s uses signed 36-bit words (see page 248 in the Owner's Manual).
-WSIZE?                                  ; free42 extension
-1, -
-STO 08                                  ; WSZ
-
-;;; --------------------------------------------------------------------------------
-;;; Short-circuit to SIMPLE_SIEVE if limit is low enough to fit in registers
-;;; --------------------------------------------------------------------------------
-500
-RCL 00
-X>Y?
-GTO B                                   ; SEGMENTED_SIEVE
-
-XEQ A                                   ; SIMPLE_SIEVE
-RCL "Base"
-STO "Primes"
-CLV "Base"
-RCL "Primes"
-RTN                                     ; END PROGRAM
-
-;;; --------------------------------------------------------------------------------
-;;; SEGMENTED_SIEVE
-;;; --------------------------------------------------------------------------------
-LBL B
-
-;;; --------------------------------------------------------------------------------
-;;; Divide the range 2 to n into s segments of size Δ ≥ √n
-;;; --------------------------------------------------------------------------------
-RCL 00
-SQRT
-ENTER                                   ; a little trick to round to the next integer
+X>=Y?
+RTNERR 2                                ; out of range
+X<>Y
 FP
+X>0?
+RTNERR 5                                ; invalid data
+
+;;; Word size, which is configurable on DM42. Note: for a real HP 42s use 35.
+;;; HP 42s uses signed 36-bit words (see page 248 in the Owner's Manual).
+WSIZE?
+1, -
+LSTO "WSIZE"
+
+;;; if n is low, simple segmentation -------------------------------------------
+100
+RCL "n"
+X>Y?
+GTO 00
+XEQ A                                   ; CalcSieve
+CF 00
+RTN
+
+;;; Segmented sieve ------------------------------------------------------------
+LBL 00
+;;; divide the range 2 to n into s segments of size Δ ≥ √n
+RCL "n"
+SQRT
+1
 +
 IP
-LSTO "S"                                ; free42 extension, segment_size
+LSTO "segsize"
 
-;;; --------------------------------------------------------------------------------
-;;; Step 1: primes up to sqrt(n) -> matrix "Base"
-;;; --------------------------------------------------------------------------------
-RCL 00
-STO 06                                  ; back up the limit n
-RCL "S"
-STO 00
-XEQ A                                   ; SIMPLE_SIEVE
-RCL 04                                  ; j = number of primes
-LSTO "P"
-RCL 06
-STO 00                                  ; restore n
+;;; Step 1: primes up to srqt(n)
+XEQ A                                   ; CalcSieve
+LSTO "Base"
+DIM?
+LSTO "numbase"                          ; number of primes in Base
+0
+LSTO "Primes"                           ; (empty matrix)
 
-;;; --------------------------------------------------------------------------------
-;;; Step 2: process segments [low, high)
-;;; --------------------------------------------------------------------------------
+;;; Step 2: process segment [low, high)
+
+;;; low = 2
 2
-LSTO "L"                                ; low = 2
-RCL "S"
+LSTO "low"
+;;; high = low + segsize
+RCL "segsize"
 +
-LSTO "H"                                ; high = low + segment_size
+LSTO "high"
 
 ;;; while low <= n:
-LBL 30
+LBL 01
+RCL "n"
+RCL "low"
+X>Y?
+GTO 02                                      ; exit while
 
-RCL 00                                  ; if high > n + 1 then high = n + 1
+;;; if high > n + 1 then high = n + 1
+RCL "n"
 1
 +
-RCL "H"
-XEQ H                                   ; MIN
-LSTO "H"
-
-;;; ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((
-;;; Set up a bit array for the current segment
-XEQ I                                   ; INIT_SEGMENT
-
-;;; for all primes in matrix "Base":
-RCL "P"
-1000, /, IP, 1, +, STO 03               ; i = 1.ppp where ppp = number of primes
-
-;;; (DEBUG
-CLST
-RCL "Base"
-STOP
-;;; DEBUG)
-
-INDEX "Base"
-
-LBL 31                                  ; loop on primes in "Base"
-RCLEL
-STO 05                                  ; p
-
-;;; Find first multiple of p in [low, high):
-;;; start = max(p * p, ((low + p - 1) // p) * p)
-;;; for j in range(start, high, p):
-;;;    A[j - low] = false
-XEQ J                                   ; START
-STO 04                                  ; j
-LBL 32                                  ; for j loop
-RCL 04                                  ; j
-RCL "L"
--
-XEQ c                                   ; SETBIT
-RCL "H"
-RCL 04                                  ; j
+RCL "high"
 X>Y?
-GTO 20
-RCL 05                                  ; p
-STO+ 04                                 ; j += p
-GTO 32                                  ; for j loop
-LBL 20
+X<>Y
+STO "high"
 
-;;; Next prime p
-RCL "P", 1, -
-RCL 03, IP                              ; i
-X>=Y?, GTO 21                           ; skip moving to next cell in the last iteration
-RCLIJ, 1, +, STOIJ                      ; move to next cell
-LBL 21
-ISG 03
-GTO 31                                  ; loop on primes in "Base"
+XEQ  B                                      ; CalcSegment
 
-;;; (DEBUG
-CLST
-RCL "L"  ; T
-RCL "H"  ; Z
-RCL 09   ; num words
-RCL 10   ; A[0]
+;;; === TODO fill and maybe create Prime ===
+;;; - Z = (optional) matrix to append to. (Pass any number if there is no matrix)
+;;; - Y = first = first number in BITMAP
+;;; - X = size = number of bits in BITMAP
+RCL "Primes"
+RCL "low"
+RCL "high"
+RCL "low"
+-
 STOP
-;;; DEBUG)
-
-;;; TODO: Add primes from the segment A[] into the result matrix "Primes"
-;;; ---- Create an empty matrix "Prime" in Step 1 (make it 1x1, set flag 01 to indicate it is empty)
-;;; ---- Count the number of primes in A[], store result in j (same as SIMPLE_SIEVE)
-;;; ---- Resize the matrix "Prime"
-;;; ---- Store the primes in "Prime" (similar to "SIMPLE_SIEVE)
-;;; ))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
+XEQ J                                       ; ToMatrix(low, high - low)
+LSTO "Primes"
+STOP
 
 ;;; low = high
+RCL "high"
+LSTO "low"
 ;;; high += segment_size
-RCL "H"
-LSTO "L"
-RCL "S"
-RCL "H"
+RCL "segsize"
 +
-LSTO "H"
+LSTO "high"
+GTO 01                                      ; while low <= n
 
-RCL 00                                  ; n
-RCL "L"
-X<=Y?
-GTO 30                                  ; while low <= n
-
-RCL "Primes"
-RTN                                     ; END PROGRAM
-
-
-;;; ================================================================================
-;;; Subroutine: SIMPLE_SIEVE
-;;; Creates a matrix "Base" containing primes from 2 to limit n.
-;;; ================================================================================
-LBL A
-
-;;; --------------------------------------------------------------------------------
-;;; Calculate the number of words in A[], store in w
-;;; --------------------------------------------------------------------------------
-RCL 00                                  ; n
-2, -                                    ; first number is 2
-RCL 08, /, IP
-STO 09                                  ; w = int(a / WSZ)
-
-;;; --------------------------------------------------------------------------------
-;;; Mark prime numbers in current segment in A[]
-;;; --------------------------------------------------------------------------------
-;; Initialize A[] with all words to 0 (initially all numbers are marked prime)
-XEQ e                                   ; CLEAR_BITS
-
-;;; for i = 2 to sqrt(n):
-;;;   if A[i] is true:
-;;;     for j = i2, i2+i, i2+2i, i2+3i, ..., not exceeding n:
-;;;       set A[j] = false
-RCL 00, SQRT, IP, 1000, /, 2 +, STO 03  ; i = 2.sss where sss= sqrt(n)
-
-LBL 00                                  ; for loop on i
-
-RCL 03                                  ; i
-IP
-XEQ b                                   ; GETBIT
-FS? 00
-GTO 01                                  ; A[i] = 1 = not true
-;;; A[i] = 0 = true
-RCL 03, IP, 2 *, STO 04                 ; j = i2
-
-LBL 02                                  ; for loop on j
-;;; set A[j] := false
-
-RCL 04                                  ; j
-XEQ c                                   ; SETBIT
-
-RCL 03, IP, STO + 04                    ; j = j + i
-RCL 00, RCL 04, X<=Y?, GTO 02           ; loop on j
-
-LBL 01
-ISG 03, GTO 00                          ; loop on i
-
-;;; --------------------------------------------------------------------------------
-;;; Count the number of primes in A[], store result in j
-;;; --------------------------------------------------------------------------------
-0, STO 04                               ; j = 0
-RCL 00, 1000, /, 2, +, STO 03           ; i = 2.nnn where nnn = n
-
-LBL 03                                  ; for loop on i
-
-RCL 03, IP                              ; i
-XEQ b                                   ; GETBIT
-FS? 00
-GTO 04                                  ; A[i] = 1 = not true
-;;; A[i] = 0 = true
-1, STO+ 04                              ; j++
-
-LBL 04
-ISG 03, GTO 03                          ; loop on i
-
-;;; --------------------------------------------------------------------------------
-;;; Store the primes into the result matrix "Base"
-;;; --------------------------------------------------------------------------------
-;;; Create a 1-row j-col matrix and index it
-1
-ENTER
-RCL 04                                  ; j
-NEWMAT
-STO "Base"
-INDEX "Base"
-
-RCL 04, STO 05                          ; k = j
-RCL 00, 1000, /, 2, +, STO 03           ; i = 2.nnn where nnn = n
-LBL 05                                  ; for loop on i
-
-RCL 03, IP                              ; i
-XEQ b                                   ; GETBIT
-FS? 00
-GTO 06                                  ; A[i] = 1 = not true
-;;; A[i] = 0 = true
-RCL 03, IP, STOEL                       ; store i
-1, STO - 05;                                 ; k--
-RCL 05, X<=0?, GTO 06                   ; skip moving to next cell in the last iteration
-RCLIJ, 1, +, STOIJ                      ; move to next cell
-
-LBL 06
-ISG 03, GTO 05                          ; loop on i
-RTN                                     ; END SIMPLE_SIEVE
-
-
-;;; ================================================================================
-;;; Subroutine: CLEAR_BITS: set all words in A[] to zero
-;;; Input: R09 = w = number of words
-;;; Result in R10..Rxx (unlimited)
-;;; ================================================================================
-LBL e
-0, STO 01                               ; a = 0
-LBL 10
-RCL 01, 10, +                           ; a + 10
-0
-STO IND ST Y
-RCL 09                                  ; w
-RCL 01                                  ; a
-X>=Y?
-RTN
-1, STO + 01                             ; a++
-GTO 10
-
-
-;;; ================================================================================
-;;; Subroutine: SETAB: set a and b to point to bit in A[x] according to WSZ
-;;; Input: number x in X (x <= n)
-;;; Side effects:
-;;; - a = index in A[] (zero based)
-;;; - b = bit number in A[] (zero based)
-;;; ================================================================================
-LBL a
-2, -                                    ; ajust x: first number is 2
-STO 02                                  ; store in b momentarily
-RCL 08, /, IP
-STO 01                                  ; a = word index in A[]
-RCL 02
-RCL 08, MOD
-STO 02                                  ; b = bit number
-RTN
-
-
-;;; ================================================================================
-;;; Subroutine: GETBIT A[x]
-;;; Input: number x in X (x <= n)
-;;; Results:
-;;; - flag 00 set if bit = 1 (=> not true), clear if bit = 0 (=> true)
-;;; ================================================================================
-LBL b
+;;; End segmented sieve
+LBL 02
 CF 00
-XEQ a                                   ; SETAB
-RCL 01, 10, +                           ; a + 10
-RCL IND ST X                            ; X = word number a in A[]
-RCL 02                                  ; X = b
+RCL "Primes"
+RTN
+
+;;; ============================================================================
+;;; Subroutine BitPos(x): point to the x'th bit in BITMAP
+;;; Input: X = number x (0 based)
+;;; Output:
+;;; - Y = a (word number, zero based)
+;;; - X = b (bit number in word,(zero based)
+;;; Variables:
+;;; - WSIZE = word size
+;;;
+;;; Tests with WSIZE=35:  0 -> 0,0.  2 -> 0,2.  34 -> 0,34.  35 -> 1,0
+;;; ============================================================================
+LBL a
+ENTER
+ENTER
+RCL "WSIZE"
+/
+IP
+X<>Y
+RCL "WSIZE"
+MOD
+RTN
+
+;;; ============================================================================
+;;; Subroutine SetBit(x): set the x'th bit in BITMAP
+;;; Input: X = number x (0 based)
+;;;
+;;; Tests with WSIZE=35:  0 -> R10=1.  2 -> R10=4.
+;;;                       34 -> R10=17,179,869,184 (0b 10000...)
+;;;                       35 -> R11=1.
+;;; ============================================================================
+LBL b
+XEQ a                                   ; BitPos
+X<>Y                                    ; X = a, Y = b
+10
++                                       ; X = a + 10 (we start on R10)
+RCL IND ST X                            ; X = a'th word from BITMAP
+RCL ST Z                                ; b
+2
+X<>Y
+Y^X                                     ; 2^b
+OR
+STO IND ST Y                            ; set bit in BITMAP
+RTN
+
+;;; ============================================================================
+;;; Subroutine: GetBit(x): get the x'th bit in BITMAP
+;;; Input: X = number x (0 based)
+;;; Sets flag 00 set if bit = 1 (=> not true), clear if bit = 0 (=> true)
+;;;
+;;; Tests with WSIZE=25:  set R10 and R11 to 3 (0b 0011).
+;;;                       0..1 -> yes.  2..34-> no.  35..36 -> yes.  37+ ->no.
+;;; ============================================================================
+LBL c
+CF 00
+XEQ a                                   ; BitPos
+X<>Y                                    ; X = a, Y = b
+10
++                                       ; X = a + 10 (we start on R10)
+RCL IND ST X                            ; X = a'th word from BITMAP
+RCL ST Z                                ; b
 BIT?
 SF 00
 RTN
 
-
-;;; ================================================================================
-;;; Subroutine: SETBIT A[x]
-;;; Input: number x in X (x <= n)
-;;; ================================================================================
-LBL c
-XEQ a                                   ; SETAB
-RCL 01, 10, +                           ; a + 10
-RCL IND ST X                            ; X = word number a in A[]
-
-2
-RCL 02                                  ; b
-Y^X                                     ; 2^b
-OR
-
-RCL 01, 10, +                           ; a + 10
-X<>Y
-STO IND ST Y                            ; set bit in A[]
+;;; ============================================================================
+;;; Subroutine ClearBits(x): set x bits in BITMAP to zeros.
+;;; Input: X = number of bits to clear
+;;; ============================================================================
+LBL d
+RCL "WSIZE"
+/
+IP                                      ; X = number of words
+LSTO "i"
+LBL 99                                  ; loop
+RCL "i"
+10
++                                       ; Y = register number (starting from R10)
+0                                       ; X = 0
+STO IND ST Y
+RCL "i"
+1
+-
+LSTO "i"
+X>=0?
+GTO 99
 RTN
 
-
-;;; ================================================================================
-;;; Subroutine: MAX
-;;; Input: X, Y
-;;; Output: X = max(X,Y)
-;;; ================================================================================
-LBL G
-X<Y?
-X<>Y
+;;; ============================================================================
+;;; Subroutine CountZeroedBits(x): count all zero (= true) bits in BITMAP.
+;;; Input: X = number of bits in BITMAP
+;;; Output: X = number of bits sets to zero.
+;;;
+;;; Tests:
+;;; - x = 5, R10 = 20 (0b 10100)  ->  3
+;;; ============================================================================
+LBL e
+1
+-
+1000
+/
+LSTO "i"                                ; for i = 0 to (x - 1)
+0
+LSTO "c"                                ; count
+LBL 98                                  ; loop
+RCL "i"
+IP
+XEQ c                                   ; GetBit
+FS? 00
+GTO 97
+RCL "c"
+1
++
+LSTO "c"
+LBL 97
+ISG "i"
+GTO 98
+RLC "c"
 RTN
 
-;;; ================================================================================
-;;; Subroutine: MIN
-;;; Input: X, Y
-;;; Output: X = min(X,Y)
-;;; ================================================================================
-LBL H
-X>Y?
-X<>Y
-RTN
-
-;;; ================================================================================
-;;; Subroutine: START
-;;; start = max(p * p, ((low + p - 1) // p) * p)
-;;; Output: X = start
-;;; ================================================================================
+;;; ============================================================================
+;;; Subroutine ToMatrix(size, first, matrix):
+;;;   store numbers corresponding to BITMAP bits set to zero in a matrix.
+;;;   Those are prime numbers.
+;;; Input:
+;;; - Z = (optional) matrix to append to. (Pass any number if there is no matrix)
+;;; - Y = first = first number in BITMAP
+;;; - X = size = number of bits in BITMAP
+;;; Output:
+;;; - X = new matrix, or input matrix extended.
+;;;
+;;; Tests:
+;;; - size = 5, first = 2, R10 = 20 (0b 10100)   -> [2, 3, 5]
+;;; ============================================================================
 LBL J
-;;; ((low + p - 1) // p) * p
-RCL "L"
-RCL 05                                  ; p
+LSTO "size"
+R↓
+LSTO "first"
+R↓
+LSTO "mat'
+
+;; count the number of primes in BITMAP
+RCL "size"
+XEQ e                                   ; CountZeroedBits(size)
+LSTO "np"                               ; number of primes
+
+;; create the result matrix
+RCL "matrx"
+MAT?
+GTO 95
+;; create a new matrix (1row, np columns)
+1
+ENTER
+RCL "np"
+NEWMAT
+LSTO "matrx"
+INDEX "matrx"
+GTO 94
+;; extend the input matrix
+LBL 95
+RCL "np"
+X=0?
+GTO 90                                  ; no prime to add in the last segment
+RCL "matrx"
+DIM?
+LSTO "cols"
+RCL "np"
++
+DIM "matrx"
+INDEX "matrx"
+1
+ENTER
+RCL "cols"
+1
++
+STOIJ
+
+;; main loop
+LBL 94                                  ; for i = 0 to (size - 1)
+RCL "size"
+1
+-
+1000
+/
+LSTO "i
+
+LBL 93
+RCL "i"
+IP
+XEQ c                                   ; GetBit
+FS? 00
+GTO 92                                  ; not a prime
+
+RCL "i"                                 ; store the prime
+IP
+RCL "first"
++
+STOEL
+
+RCL "np"                                ; np--
+1
+-
+LSTO "np"
+X<=0?                                  ; skip moving to next cell in the last iteration
+GTO 92
+
+RCLIJ                                  ; move to next cell in matrx
+1
++
+STOIJ
+
+LBL 92
+ISG "i"
+GTO 93
+
+LBL 90
+RCL "matrx"
+RTN
+
+;;; ============================================================================
+;;; Subroutine CalcSieve(n):
+;;;   Calculate the fist x prime numbers using simple sieve.
+;;;   The first bit in BITMAP represents number 2.
+;;; Input: X = limit (n >= 2)
+;;; Output: X = new matrix
+;;;
+;;; Tests:
+;;; - n = 5:
+;;;   i = 2 --> BITMAP = [ 2  3  -4-  5 ]
+;;;             = 0100
+;;;             = 4  (3 primes)
+;;; - n = 10:
+;;;   i = 2 --> BITMAP = [ 2  3  -4-  5  -6-  7  -8-  9  -10- ]
+;;;   i = 3 --> BITMAP = [ 2  3  -4-  5  -6-  7  -8-  -9-  -10- ]
+;;;             = 1,1101,0100
+;;              = 468  (4 primes)
+;;; - n = 20:
+;;;   i = 2 --> BITMAP = [ 2  3  -4-  5  -6-  7  -8-  9  -10-  11  -12-  13  -14-  15
+;;;                        -16-  17  -18-  19  -20-  ]
+;;;   i = 3 --> BITMAP = [ 2  3  -4-  5  -6-  7  -8-  -9-  -10-  11  -12-  13  -14-  -15-
+;;;                        -16-  17  -18-  19  -20-  ]
+;;;   i = 4 --> BITMAP = [ 2  3  -4-  5  -6-  7  -8-  -9-  -10-  11  -12-  13  -14-  -15-
+;;;                        -16-  17  -18-  19  -20-  ]
+;;;             = 101,0111,0101,1101,0100
+;;;             = 357,844  (8 primes)
+;;; ============================================================================
+LBL A
+LSTO "n"
+
+;;; Mark prime numbers in BITMAP -----------------------------------------------
+XEQ d                                   ; ClearBits(n)
+
+;;; for i = 2 to sqrt(n):
+;;;   if BITMAP[i] is true (bit = 0):
+;;;     for j = i2, i2+i, i2+2i, i2+3i, ..., not exceeding n:
+;;;       set BITMAP[j] = false (bit = 1)
+RCL "n"
+SQRT
+IP
+1000
+/
+2
++
+LSTO "i"
+
+LBL 80                                  ; for i = 2 to sqrt(n)
+RCL "i"
+IP
+2
+-
+XEQ c                                   ; GetBit(i - 2)
+FS? 00
+GTO 81                                  ; not a prime
+
+RCL "i"
+IP
+2
+*
+LSTO "j"                                ; j = i2
+
+LBL 82                                  ; for j = i2 to n
+RCL "j"                                  ; j
+2
+-
+XEQ b                                   ; SetBit(j - 2)
+RCL "i"
+IP
+RCL "j"
++
+LSTO "j"                                ; j += i
+RCL "n"
+X>=Y?
+GTO 82
+
+LBL 81
+ISG "i"
+GTO 80
+
+;;; Convert BITMAP into a matrix -----------------------------------------------
+2
+ENTER
+RCL "n"
+1
+-
+XEQ J                                   ; ToMatrix(n -1, 2)
+RTN
+
+;;; ============================================================================
+;;; Subroutine CalcSegment():
+;;;   Calculate the next segment [low, high).
+;;;   Result is in BITMAP.
+;;; Input variables:
+;;; - n
+;;; - low
+;;; - high
+;;; - Base (base segment matrix)
+;;; - numbase
+;;; ============================================================================
+LBL B
+
+;;; clear BITMAP for current segment (high - low)
+RCL "high"
+RCL "low"
+-
+XEQ d                                   ; ClearBits(high - low)
+
+;;; for p in Base:
+INDEX "Base"
+RCL "numbase"
+1000
+/
+1
++
+LSTO "i"
+
+LBL 10
+RCLEL
+LSTO "p"
+
+;;; Find first multiple of p in [low, high)
+;;; start = max(p * p, ((low + p - 1) // p) * p)
+XEQ C                                   ; CalcStart
+
+;;; for j in range(start, high, p):
+;;;    BITMAP[j - low] = false
+LSTO "j"                                ; j = start
+LBL 12
+RCL "high"
+RCL "j"
+X>=Y?
+GTO 13                                  ; exit for j loop
+
+RCL "j"
+RCL "low"
+-
+XEQ b                                   ; SetBit
+
+RCL "j"
+RCL "p"
++
+LSTO "j"
+GTO 12                                  ; for j in range(start, high, p)
+
+;;; move to the next prime in Base
+LBL 13
+RCL "i"
+IP
+RCL "numbase"
+X=Y?                                   ; skip moving to next cell in the last iteration
+GTO 11
+RCLIJ
+1
++
+STOIJ
+
+LBL 11
+ISG "i"
+GTO 10                                  ; for p in Base
+RTN
+
+;;; ============================================================================
+;;; Subroutine CalcStart():
+;;;   Calculate the starting point in the current segment.
+;;; Input variables:
+;;; - low
+;;; - p
+;;; ============================================================================
+LBL C
+;;; start = max(p * p, ((low + p - 1) // p) * p)
+RCL "low"
+RCL "p"
 +
 1
 -
-RCL 05                                  ; p
+RCL "p"
 /
-IP                                      ; floor division (p is always positive)
-RCL 05                                  ; p
+IP                                      ; floor division (because p is always positive)
+RCL "p"
 *
-;;; p * p
-RCL 05                                  ; p
+RCL "p"
 X^2
-;;; max
-XEQ G                                   ; MAX
-RTN
-
-;;; ================================================================================
-;;; Subroutine: INIT_SEGMENT
-;;; Initialize the bit array for the current segment
-;;; ================================================================================
-;; Calculate number of words w = int((high - low) / WSZ)
-LBL I
-RCL "H"
-RCL "L"
--
-RCL 08
-/
-IP
-STO 09
-;; Initialize A[] with all words to 0 (initially all numbers are marked prime)
-XEQ e                                   ; CLEAR_BITS
+X<Y?
+X<>Y
 RTN
