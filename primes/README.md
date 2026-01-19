@@ -26,7 +26,7 @@ Screenshot:
 
 ## Ulam
 
-Draws an Ulam spiral. See https://en.wikipedia.org/wiki/Ulam_spiral .
+Draws an [Ulam spiral](https://en.wikipedia.org/wiki/Ulam_spiral).
 Enter the number of segments in register X, for example 100.
 Remember to adjust the resolution for your own device.
 
@@ -40,10 +40,12 @@ Screenshot on Free42 iPhone app:
 
 ## NextP
 
-Given a number, return the next prime.
+Given a number in register X, return the next prime.
 
 ## Sieve
 
-Given a limit > 2, creates a matrix containing all primes in the range from 2 to the limit.
-Uses the Sieve of Eratosthenes algorithm, and switches to the segmented version if the limit
-is too high in order to save registers.
+Given a limit > 2 in register X, creates a matrix containing all primes in the range
+from 2 to the limit.  Uses the
+[Sieve of Eratosthenes](https://en.wikipedia.org/wiki/Sieve_of_Eratosthenes) algorithm,
+and switches to the segmented version if the limit is too high in order to save
+registers.

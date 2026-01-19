@@ -4,18 +4,21 @@
 ;;; Input: X = the limit n.
 ;;; Output: X = matrix of primes (1 row multi columns).
 ;;;
-;;; Global variables:
+;;; Global (program level scope) variables:
+;;; - n: input limit.
 ;;; - WSIZE: word size.
-;;; - BITMAP refers to registers R10..R25 (or more if SIZE is set bigger).
-;;;   It is a zero-indexed bit array representing successive numbers from 2 to n.
-;;;   The first word is for numbers 2..35, the second word for numbers 36..72, etc.
-;;;   In each word:
+;;;
+;;; BITMAP refers to registers R10..R25 (or more if SIZE is set bigger).
+;;; It is a zero-indexed bit array representing successive numbers from 2 to n.
+;;; The first word is for numbers 2..35, the second word for numbers 36..72, etc.
+;;; In each word:
 ;;;   - A bit 0 marks the corresponding number as PRIME,
 ;;;   - A bit 1 marks the correspomding number as non-prime.
-;;;   R00..R14 is 15 registers, which enough to contain 15 * 35 = 525 numbers.
-;;;   That's enough for the first 99 primes without segmentation.
+;;; R00..R14 is 15 registers, which enough to contain 15 * 35 = 525 numbers.
+;;; That's enough for the first 99 primes without segmentation.
 ;;;
-;;; List of prime numbers from 1 to 500:
+;;; Example: enter 500 XEQ Sieve. The result is a matrix containing the following
+;;; numbers:
 ;;; 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73,
 ;;; 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163,
 ;;; 167, 173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229, 233, 239, 241, 251,
@@ -43,7 +46,7 @@ WSIZE?
 1, -
 LSTO "WSIZE"
 
-;;; if n is low, simple segmentation -------------------------------------------
+;;; If n is low, simple sieve (first segment only)  ----------------------------
 100
 RCL "n"
 X>Y?
@@ -63,6 +66,7 @@ IP
 LSTO "segsize"
 
 ;;; Step 1: primes up to srqt(n)
+
 XEQ A                                   ; CalcSieve
 LSTO "Base"
 DIM?
@@ -98,10 +102,6 @@ STO "high"
 
 XEQ  B                                      ; CalcSegment
 
-;;; === TODO fill and maybe create Prime ===
-;;; - Z = (optional) matrix to append to. (Pass any number if there is no matrix)
-;;; - Y = first = first number in BITMAP
-;;; - X = size = number of bits in BITMAP
 RCL "Primes"
 RCL "low"
 RCL "high"
@@ -363,19 +363,20 @@ RTN
 ;;;             = 1,1101,0100
 ;;              = 468  (4 primes)
 ;;; - n = 20:
-;;;   i = 2 --> BITMAP = [ 2  3  -4-  5  -6-  7  -8-  9  -10-  11  -12-  13  -14-  15
-;;;                        -16-  17  -18-  19  -20-  ]
-;;;   i = 3 --> BITMAP = [ 2  3  -4-  5  -6-  7  -8-  -9-  -10-  11  -12-  13  -14-  -15-
-;;;                        -16-  17  -18-  19  -20-  ]
-;;;   i = 4 --> BITMAP = [ 2  3  -4-  5  -6-  7  -8-  -9-  -10-  11  -12-  13  -14-  -15-
-;;;                        -16-  17  -18-  19  -20-  ]
+;;;   i = 2 --> BITMAP = [ 2   3  -4-  5  -6-  7  -8-  9  -10-
+;;;                        11  -12-  13  -14-  15 -16-  17  -18-  19  -20-  ]
+;;;   i = 3 --> BITMAP = [ 2  3  -4-  5  -6-  7  -8-  -9-  -10-
+;;;                        11  -12-  13  -14-  -15-  -16-  17  -18-  19  -20-  ]
+;;;   i = 4 --> BITMAP = [ 2  3  -4-  5  -6-  7  -8-  -9-  -10-
+;;;                        11  -12-  13  -14-  -15- -16-  17  -18-  19  -20-  ]
 ;;;             = 101,0111,0101,1101,0100
 ;;;             = 357,844  (8 primes)
 ;;; ============================================================================
 LBL A
 LSTO "n"
 
-;;; Mark prime numbers in BITMAP -----------------------------------------------
+;;; Step 1: Mark prime numbers in BITMAP
+
 XEQ d                                   ; ClearBits(n)
 
 ;;; for i = 2 to sqrt(n):
@@ -424,7 +425,8 @@ LBL 81
 ISG "i"
 GTO 80
 
-;;; Convert BITMAP into a matrix -----------------------------------------------
+;;; Step 2: Convert BITMAP into a matrix
+
 2
 ENTER
 RCL "n"
@@ -439,10 +441,10 @@ RTN
 ;;;   Result is in BITMAP.
 ;;; Input variables:
 ;;; - n
-;;; - low
-;;; - high
+;;; - low (low limit for the segment)
+;;; - high (high limit for the segment)
 ;;; - Base (base segment matrix)
-;;; - numbase
+;;; - numbase (number of primes in Base)
 ;;; ============================================================================
 LBL B
 
@@ -509,12 +511,12 @@ RTN
 ;;; ============================================================================
 ;;; Subroutine CalcStart():
 ;;;   Calculate the starting point in the current segment.
+;;;   start = max(p * p, ((low + p - 1) // p) * p)
 ;;; Input variables:
 ;;; - low
 ;;; - p
 ;;; ============================================================================
 LBL C
-;;; start = max(p * p, ((low + p - 1) // p) * p)
 RCL "low"
 RCL "p"
 +
